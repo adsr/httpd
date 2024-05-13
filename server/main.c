@@ -40,6 +40,7 @@
 #include "apr_uri.h"
 #include "util_ebcdic.h"
 #include "ap_mpm.h"
+#include "http_protocol.h"
 
 #if APR_HAVE_UNISTD_H
 #include <unistd.h>
@@ -378,7 +379,7 @@ static void usage(process_rec *process)
                  pad_len, " ");
 #endif
     ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
-                 "       %*s [-v] [-V] [-h] [-l] [-L] [-t] [-T] [-S] [-X]",
+                 "       %*s [-v] [-V] [-h] [-l] [-L] [-t] [-T] [-S] [-X] [-R]",
                  pad_len, " ");
     ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
                  "Options:");
@@ -459,8 +460,47 @@ static void usage(process_rec *process)
                  "  -T                 : start without DocumentRoot(s) check");
     ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
                  "  -X                 : debug mode (only one worker, do not detach)");
+    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
+                 "  -R uri             : rewrite test");
 
     destroy_and_exit_process(process, 1);
+}
+
+static const char *rewrite_test_uri = NULL;
+
+static int ap_run_rewrite_test(process_rec *proc) {
+    apr_pool_t *pool;
+    conn_rec *conn;
+    request_rec *req;
+    server_rec *svr;
+
+    apr_pool_create(&pool, NULL);
+
+    module *mod_rewrite;
+    const command_rec *hook_fixup_cmd;
+    int (*hook_fixup)(request_rec *r);
+
+    mod_rewrite = ap_find_linked_module("mod_rewrite.c");
+    hook_fixup_cmd = ap_find_command("HookFixup", mod_rewrite->cmds);
+    hook_fixup = (void *)hook_fixup_cmd->func.no_args;
+
+    svr = ap_server_conf;
+
+    conn = apr_pcalloc(pool, sizeof(*conn));
+    conn->pool = pool;
+    conn->base_server = svr;
+
+    req = ap_create_request(conn);
+    req->the_request = apr_psprintf(pool, "GET %s HTTP/1.1", rewrite_test_uri);
+    ap_parse_request_line(req);
+    ap_run_translate_name(req);
+    ap_run_map_to_storage(req);
+
+    hook_fixup(req);
+
+    apr_pool_destroy(pool);
+
+    return 0;
 }
 
 int main(int argc, const char * const argv[])
@@ -626,6 +666,11 @@ int main(int argc, const char * const argv[])
             }
             break;
 
+        case 'R':
+            ap_run_mode = AP_SQ_RM_REWRITE_TEST;
+            rewrite_test_uri = opt_arg;
+            break;
+
         case 'h':
         case '?':
             usage(process);
@@ -705,6 +750,9 @@ int main(int argc, const char * const argv[])
             if (showdirectives) { /* deferred in case of DSOs */
                 ap_show_directives();
                 destroy_and_exit_process(process, 0);
+            }
+            else if (ap_run_mode == AP_SQ_RM_REWRITE_TEST) {
+                ap_run_rewrite_test(process);
             }
             else {
                 ap_run_test_config(pconf, ap_server_conf);

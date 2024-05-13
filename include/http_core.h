@@ -1059,6 +1059,8 @@ AP_DECLARE(int) ap_state_query(int query_code);
 #define AP_SQ_RM_CONFIG_TEST       3
   /** only dump some parts of the config */
 #define AP_SQ_RM_CONFIG_DUMP       4
+  /** rewrite test */
+#define AP_SQ_RM_REWRITE_TEST      5
 
 #ifdef __cplusplus
 }

@@ -321,6 +321,8 @@ typedef struct {
     int        skip;                 /* number of next rules to skip          */
     int        maxrounds;            /* limit on number of loops with N flag  */
     char       *escapes;             /* specific backref escapes              */
+    char       *filename;
+    int        line_num;
 } rewriterule_entry;
 
 typedef struct {
@@ -3781,6 +3783,8 @@ static const char *cmd_rewriterule(cmd_parms *cmd, void *in_dconf,
     newrule->cookie = NULL;
     newrule->skip   = 0;
     newrule->maxrounds = REWRITE_MAX_ROUNDS;
+    newrule->filename = apr_pstrdup(cmd->pool, cmd->directive->filename);
+    newrule->line_num = cmd->directive->line_num;
     if (a3 != NULL) {
         if ((err = cmd_parseflagfield(cmd->pool, newrule, a3,
                                       cmd_rewriterule_setflag)) != NULL) {
@@ -4123,6 +4127,8 @@ static int apply_rewrite_rule(rewriterule_entry *p, rewrite_ctx *ctx)
            (!rc &&  (p->flags & RULEFLAG_NOTMATCH))   ) ) {
         return 0;
     }
+
+    printf("rewrite_match @ %s:%d\n", p->filename, p->line_num);
 
     /* It matched, wow! Now it's time to prepare the context structure for
      * further processing
@@ -5294,6 +5300,7 @@ static const command_rec command_table[] = {
                      "an URL-applied regexp-pattern and a substitution URL"),
     AP_INIT_TAKE23(   "RewriteMap",      cmd_rewritemap,      NULL, RSRC_CONF,
                      "a mapname and a filename and options"),
+    AP_INIT_NO_ARGS("HookFixup", (void *)hook_fixup, NULL, RSRC_CONF, ""),
     { NULL }
 };
 
